@@ -2,12 +2,11 @@
 
 from maelstrom import Node, Body, Request
 
-node = Node()
+if __name__ == "__main__":
+    node = Node()
 
+    @node.handler
+    async def echo(req: Request) -> Body:
+        return {"type": "echo_ok", "echo": req.body["echo"]}
 
-@node.handler
-async def echo(req: Request) -> Body:
-    return {"type": "echo_ok", "echo": req.body["echo"]}
-
-
-node.run()
+    node.run()
