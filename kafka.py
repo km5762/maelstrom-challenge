@@ -24,30 +24,31 @@ if __name__ == "__main__":
         key = req.body["key"]
         msg = req.body["msg"]
 
-        for _ in range(0, 100):
-            old = await read(key)
+        tail_key = f"{key}-tail"
+        tail = None
 
-            if old is None:
-                await write(key, [])
+        while(True):
+            tail = await read(tail_key)
+            if tail is None:
+                tail = 0
+                await write(tail_key, tail)
+            if (await cas(tail_key, tail, tail + 1)):
+                break
 
-            new = (old or []) + [msg]
-
-            if (await cas(key, old, new)):
-                offset = len(old) if old else 0
-                return {"type": "send_ok", "offset": offset}
-
-        return {"type": "send_error", "message": "CAS failed too many times"}
-    
+        await write(f"{key}-{tail}", msg)
+        return {"type": "send_ok", "offset": tail}
+        
     @node.handler
     async def poll(req: Request) -> Body:
         offsets = req.body["offsets"]
-        keys = list(offsets.keys())
-        logs = await asyncio.gather(*(read(key) for key in keys))
 
         msgs = {}
-        for key, log, offset in zip(keys, logs, offsets.values()):
-            log = log or []
-            msgs[key] = [[i, log[i]] for i in range(offset, len(log))]
+        for key, offset in offsets.items():
+            value = await read(f"{key}-{offset}")
+            if value is not None:
+                msgs[key] = [[offset, value]]
+            else:
+                msgs[key] = []
 
         return {"type": "poll_ok", "msgs": msgs}
 
